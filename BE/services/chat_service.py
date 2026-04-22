@@ -137,10 +137,6 @@ class ChatService:
             document_count=0,
         )
 
-        # Validate documents belong to the company before creating the chat
-        if files:
-            await self._document_service.validate_document_company(company_name, files)
-
         self._chat_repo.insert_chat(chat)
         # Commit immediately so the chat record is visible to the document pipeline
         self._chat_repo.session.commit()
@@ -268,9 +264,6 @@ class ChatService:
         chat = self._chat_repo.get_chat(chat_id)
         if chat is None:
             raise ChatNotFoundException(f"Chat not found: {chat_id}")
-
-        # Validate documents belong to the company before processing
-        await self._document_service.validate_document_company(chat.company_name, files)
 
         documents = await self._document_service.process_upload(chat.chat_id, files)
         chat.document_count = (chat.document_count or 0) + len(documents)
