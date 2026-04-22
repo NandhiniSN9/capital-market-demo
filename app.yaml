@@ -2,11 +2,11 @@ command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 env:
   - name: DATABRICKS_HOST
-    value: "https://dbc-7a10f30f-c823.cloud.databricks.com"
+    value: "https://{host}.cloud.databricks.com"
   - name: DATABRICKS_SQL_WAREHOUSE_ID
-    value: "63eeffc83ea4ed5a"
+    value: ""
   - name: DATABRICKS_SQL_HTTP_PATH
-    value: "/sql/1.0/warehouses/63eeffc83ea4ed5a"
+    value: "/sql/1.0/warehouses/{id}"
   - name: DATABRICKS_CATALOG
     value: "zeb_capital_markets_demo"
   - name: DATABRICKS_SCHEMA
