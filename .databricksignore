@@ -2,7 +2,51 @@
 .databricks/
 .kiro/
 .vscode/
+.idea/
+.git/
+.gitignore
+
+# Node modules
 FE/FE/node_modules/
+node_modules/
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+
+# Build artifacts
+dist/
+build/
+*.whl
+
+# Environment
+.env
+.env.local
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Manifest
 manifest.mf
+
+# Documentation (optional - remove if you want to sync docs)
+DEPLOYMENT_GUIDE.md
