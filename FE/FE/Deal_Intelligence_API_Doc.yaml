@@ -1,0 +1,792 @@
+openapi: 3.0.3
+info:
+  title: AI-Augmented Research & Deal Intelligence Agent API
+  description: >
+    Databricks-native FastAPI backend for capital markets analysts to upload
+    financial documents, process them through an async extraction and embedding
+    pipeline, and interact with an AI-powered chat agent for deal research
+    and analysis with RAG-based retrieval, structured calculations, and
+    source citations.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+  - url: https://{databricks-host}/api/v1
+    description: Databricks production
+
+paths:
+  /:
+    get:
+      summary: Root endpoint
+      description: Returns application name and version.
+      operationId: getRoot
+      tags: [Default]
+      responses:
+        '200':
+          description: Application info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app_name:
+                    type: string
+                    example: deal-intelligence-agent
+                  version:
+                    type: string
+                    example: 1.0.0
+
+  /health:
+    get:
+      summary: Health check
+      description: Liveness probe endpoint.
+      operationId: healthCheck
+      tags: [Default]
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+
+  /ready:
+    get:
+      summary: Readiness check
+      description: Checks Databricks SQL and Vector Search connectivity.
+      operationId: readinessCheck
+      tags: [Default]
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  checks:
+                    type: object
+                    properties:
+                      databricks_sql:
+                        type: string
+                        example: connected
+                      vector_search:
+                        type: string
+                        example: connected
+        '503':
+          description: Service not ready
+
+  /chats:
+    get:
+      summary: List all chats
+      description: Returns a paginated dashboard listing of all chat workspaces.
+      operationId: listChats
+      tags: [Chats]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, in_progress, completed, failed]
+        - name: analyst_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/AnalystType'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated list of chats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedChatsResponse'
+
+    post:
+      summary: Create chat or upload documents
+      description: |
+        Two modes:
+        1. New chat (no chat_id): Creates workspace with company_name and analyst_type, optional files.
+        2. Existing chat (chat_id provided): Uploads documents to existing chat, requires at least one file.
+      operationId: createChatOrUpload
+      tags: [Chats]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                chat_id:
+                  type: string
+                  format: uuid
+                  description: If provided, uploads documents to this existing chat. If omitted, creates a new chat.
+                company_name:
+                  type: string
+                  description: Required when creating a new chat.
+                company_url:
+                  type: string
+                analyst_type:
+                  $ref: '#/components/schemas/AnalystType'
+                  description: Required when creating a new chat.
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Optional for new chat. Required for existing chat document upload.
+      responses:
+        '201':
+          description: Chat created or documents uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatWithDocuments'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /chats/{chat_id}:
+    get:
+      summary: Get chat details
+      description: Returns full chat details including documents and sessions.
+      operationId: getChatDetails
+      tags: [Chats]
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+      responses:
+        '200':
+          description: Chat details with documents and sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chats/{chat_id}/documents/{document_id}:
+    delete:
+      summary: Delete a document
+      description: Soft-deletes a document and cascades to chunks and citations.
+      operationId: deleteDocument
+      tags: [Documents]
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Document deleted
+                  document_id:
+                    type: string
+                    format: uuid
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chats/{chat_id}/messages:
+    post:
+      summary: Send message to agent (async)
+      description: |
+        Accepts a user question and initiates async agent processing. Returns
+        immediately with a conversation_id and status "in_progress". The agent
+        pipeline (RAG retrieval, LLM invocation, citation resolution) runs in
+        the background. The frontend should poll the conversation status endpoint
+        every 10 seconds until status is "completed" or "failed".
+
+        Creates a new session if session_id is omitted.
+      operationId: sendMessage
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '202':
+          description: Message accepted, processing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /conversations/{conversation_id}:
+    get:
+      summary: Poll conversation status
+      description: |
+        Returns the current status of an async agent conversation. The frontend
+        should poll this endpoint every 10 seconds. When status is "completed",
+        the full agent response (content, citations, confidence_level, calculations,
+        suggested_questions) is included. When status is "failed", an error message
+        is provided.
+      operationId: getConversationStatus
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200':
+          description: Conversation status with response if completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPollResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chats/{chat_id}/sessions/{session_id}/messages:
+    get:
+      summary: Get conversation history
+      description: Returns all messages in a session ordered chronologically.
+      operationId: getSessionMessages
+      tags: [Messages]
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    ChatId:
+      name: chat_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DocumentId:
+      name: document_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ConversationId:
+      name: conversation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    AnalystType:
+      type: string
+      enum:
+        - buy_side
+        - sell_side
+        - credit
+        - dcm
+        - private_markets
+
+    ScenarioType:
+      type: string
+      enum:
+        - pre_earnings
+        - earnings_day
+        - earnings_call
+        - post_earnings
+        - balance_sheet_analysis
+        - income_statement_analysis
+        - cash_flow_analysis
+        - covenant_analysis
+        - issuer_creditworthiness
+        - debt_service_capacity
+        - refinancing_risk
+        - market_terms_analysis
+        - exploratory_due_diligence
+        - confirmatory_due_diligence
+
+    ChatStatus:
+      type: string
+      enum:
+        - active
+        - in_progress
+        - completed
+        - failed
+
+    ProcessingStatus:
+      type: string
+      enum:
+        - pending
+        - processing
+        - ready
+        - failed
+
+    ConversationStatus:
+      type: string
+      description: Status of an async agent conversation
+      enum:
+        - in_progress
+        - completed
+        - failed
+
+    ChatSummary:
+      type: object
+      required:
+        - chat_id
+        - company_name
+        - analyst_type
+        - status
+        - document_count
+        - session_count
+      properties:
+        chat_id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        company_sector:
+          type: string
+          nullable: true
+        analyst_type:
+          $ref: '#/components/schemas/AnalystType'
+        status:
+          $ref: '#/components/schemas/ChatStatus'
+        document_count:
+          type: integer
+        session_count:
+          type: integer
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    PaginatedChatsResponse:
+      type: object
+      required:
+        - chats
+        - total
+        - page
+        - limit
+      properties:
+        chats:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatSummary'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    ChatWithDocuments:
+      type: object
+      properties:
+        chat_id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        company_url:
+          type: string
+          nullable: true
+        company_sector:
+          type: string
+          nullable: true
+        analyst_type:
+          $ref: '#/components/schemas/AnalystType'
+        status:
+          $ref: '#/components/schemas/ChatStatus'
+        document_count:
+          type: integer
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentResponse'
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    ChatDetail:
+      type: object
+      properties:
+        chat_id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+        company_url:
+          type: string
+          nullable: true
+        company_sector:
+          type: string
+          nullable: true
+        analyst_type:
+          $ref: '#/components/schemas/AnalystType'
+        status:
+          $ref: '#/components/schemas/ChatStatus'
+        document_count:
+          type: integer
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentResponse'
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionSummary'
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    DocumentResponse:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+        file_type:
+          type: string
+          enum: [pdf, pptx, docx]
+        document_category:
+          type: string
+          enum: [financial_statement, legal, operational, market]
+          nullable: true
+        page_count:
+          type: integer
+          nullable: true
+        processing_status:
+          $ref: '#/components/schemas/ProcessingStatus'
+        presigned_url:
+          type: string
+          description: Time-limited URL for viewing the document inline
+        download_url:
+          type: string
+          description: Time-limited URL for downloading the document as an attachment
+        uploaded_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    SessionSummary:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        session_title:
+          type: string
+          nullable: true
+        agent_type:
+          type: string
+          enum: [deal, rfq]
+        message_count:
+          type: integer
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required:
+        - content
+        - analyst_type
+        - scenario_type
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          description: Omit to create a new session.
+        session_title:
+          type: string
+          description: Used when creating a new session.
+        agent_type:
+          type: string
+          enum: [deal, rfq]
+          default: deal
+        analyst_type:
+          $ref: '#/components/schemas/AnalystType'
+        scenario_type:
+          $ref: '#/components/schemas/ScenarioType'
+        content:
+          type: string
+          description: The user's question.
+          example: What is the Debt Service Coverage Ratio?
+
+    ConversationResponse:
+      type: object
+      description: Immediate response when a message is submitted for async processing
+      required:
+        - conversation_id
+        - session_id
+        - status
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: Unique identifier for this conversation. Use to poll for results.
+        session_id:
+          type: string
+          format: uuid
+          description: The session this conversation belongs to (created if not provided).
+        status:
+          $ref: '#/components/schemas/ConversationStatus'
+        message:
+          type: string
+          example: Your question is being processed. Poll the conversation endpoint for results.
+        created_at:
+          type: string
+          format: date-time
+
+    ConversationPollResponse:
+      type: object
+      description: |
+        Response from the polling endpoint. When status is "in_progress", only
+        metadata is returned. When "completed", the full agent response is included.
+        When "failed", an error_message explains what went wrong.
+      required:
+        - conversation_id
+        - session_id
+        - status
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/ConversationStatus'
+        user_query:
+          type: string
+          description: The original user question
+        analyst_type:
+          $ref: '#/components/schemas/AnalystType'
+        scenario_type:
+          $ref: '#/components/schemas/ScenarioType'
+        content:
+          type: string
+          nullable: true
+          description: |
+            Agent response as HTML string (populated when status is "completed").
+            Contains structured HTML with CSS classes for frontend rendering:
+            - div.agent-analysis: Main analysis content
+            - div.citation-badges: Inline citation badges
+            - div.confidence-badge: Confidence level indicator
+            - details.expandable-*: Expandable sections (calculations, sources, assumptions)
+            - div.suggested-questions: Follow-up question chips
+        citations:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/CitationResponse'
+          description: Source citations (populated when status is "completed")
+        confidence_level:
+          type: string
+          nullable: true
+          enum: [high, medium, low]
+        assumptions:
+          type: string
+          nullable: true
+        calculations:
+          type: object
+          nullable: true
+        suggested_questions:
+          type: array
+          nullable: true
+          items:
+            type: string
+        error_message:
+          type: string
+          nullable: true
+          description: Error details (populated when status is "failed")
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        message_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          description: |
+            For user messages: plain text content.
+            For assistant messages: HTML-formatted response with structured sections
+            (analysis, citations, confidence badge, expandable calculations/sources/assumptions,
+            suggested questions). Frontend renders this HTML directly.
+        citations:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/CitationResponse'
+        confidence_level:
+          type: string
+          nullable: true
+          enum: [high, medium, low]
+        assumptions:
+          type: string
+          nullable: true
+        calculations:
+          type: object
+          nullable: true
+        suggested_questions:
+          type: array
+          nullable: true
+          items:
+            type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CitationResponse:
+      type: object
+      properties:
+        citation_id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        document_name:
+          type: string
+        page_number:
+          type: integer
+        section_name:
+          type: string
+          nullable: true
+        source_text:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error_code
+        - message
+        - trace_id
+      properties:
+        error_code:
+          type: string
+          example: CHAT_NOT_FOUND
+        message:
+          type: string
+          example: Chat with the specified ID was not found or is inactive.
+        details:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        trace_id:
+          type: string
+          format: uuid
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

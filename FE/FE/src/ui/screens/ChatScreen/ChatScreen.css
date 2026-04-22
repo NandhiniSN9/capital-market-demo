@@ -1,0 +1,73 @@
+.chat-screen-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #020617;
+  overflow: hidden;
+}
+
+.chat-screen-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.chat-screen-panels {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Left panel */
+.chat-left-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #020617;
+  border-right: 1px solid rgba(30, 41, 59, 0.5);
+  overflow: hidden;
+}
+
+/* Right panel (chat area) */
+.chat-right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Consolidated full-screen loader overlay */
+.chat-screen-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background-color: rgba(2, 6, 23, 0.85);
+  backdrop-filter: blur(4px);
+}
+
+.chat-screen-loader-text {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+}
+
+/* Citation document viewer side panel */
+.chat-citation-doc-panel {
+  width: 480px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideInRight 0.25s ease-out;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}

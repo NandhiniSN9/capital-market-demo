@@ -1,0 +1,78 @@
+# Static metadata: table/column definitions only.
+# Version: v1
+#
+# NOTE: Formulas are NOT stored here.
+# They are loaded at runtime from UC Metrics Volume YAML files.
+# See: src/repositories/uc_metrics_repository.py
+# Configure the volume path via UC_METRICS_VOLUME_PATH env variable.
+
+tables:
+  wallet_share_snapshots:
+    description: "Daily wallet share snapshots per trader-counterparty pair"
+    columns:
+      snapshot_id: "PK – unique snapshot identifier"
+      trader_id: "FK to users – the trader being measured"
+      counterparty_id: "FK to firms – the client firm"
+      snapshot_date: "Date of the snapshot"
+      win_rate_pct: "Win rate percentage on that date"
+      total_volume: "Total notional traded (USD)"
+      avg_spread_bps: "Average spread in basis points"
+      total_rfqs: "Total RFQs received"
+      rfqs_won: "RFQs won"
+      pnl_cumulative: "Cumulative P&L (USD)"
+
+  trace_data:
+    description: "TRACE market data – publicly reported bond trades"
+    columns:
+      trace_id: "PK – unique TRACE record"
+      bond_id: "FK to bonds"
+      symbol: "Bond symbol (e.g. GS.VS)"
+      issuer_name: "Issuer full name"
+      price: "Execution price"
+      yield: "Yield at execution"
+      quantity: "Face value traded"
+      trade_date: "TRACE report date"
+      trade_time: "TRACE report time"
+      product_subtype: "CORP | GOVT | MBS | ABS"
+      callable: "Whether bond is callable"
+
+  bonds:
+    description: "Bond reference data"
+    columns:
+      bond_id: "PK – unique bond identifier"
+      issuer: "Issuer name"
+      ticker: "Ticker symbol"
+      coupon: "Coupon rate (%)"
+      maturity_date: "Maturity date"
+      asset_class: "IG_CORP | HY_CORP | GOVT | MBS | ABS"
+      currency: "Currency (default USD)"
+      bond_display: "Human-readable label e.g. GS 4.75 10/21/2032"
+      callable: "Callable flag"
+      product_subtype: "CORP | GOVT | MBS | ABS"
+
+  firms:
+    description: "Counterparty / client firm reference data"
+    columns:
+      firm_id: "PK – unique firm identifier"
+      name: "Legal entity name"
+      firm_type: "dealer | client"
+      sector: "e.g. Asset Manager, Hedge Fund, Bank"
+      region: "NA | EMEA | APAC"
+
+  rfq_trades:
+    description: "Internal RFQ trade history"
+    columns:
+      rfq_id: "PK – unique RFQ identifier"
+      trader_id: "FK to users"
+      bond_id: "FK to bonds"
+      counterparty_id: "FK to firms"
+      side: "BUY | SELL"
+      notional: "Notional value (USD)"
+      spread_bps: "Quoted spread (bps)"
+      vs_mkt_bps: "Spread vs TRACE benchmark (bps)"
+      venue: "MARKETAXESS | DIRECT | BLOOMBERG | TRADEWEB"
+      status: "won | lost | pending | cancelled"
+      pnl: "Realized P&L (USD)"
+      response_time_ms: "Time to respond (ms)"
+      execution_quality: "Score -1 to 1"
+      rfq_time: "Timestamp RFQ was received"

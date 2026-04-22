@@ -1,0 +1,8 @@
+# Exclude unwanted folders from Databricks sync
+.databricks/
+.kiro/
+.vscode/
+FE/FE/node_modules/
+__pycache__/
+*.pyc
+manifest.mf

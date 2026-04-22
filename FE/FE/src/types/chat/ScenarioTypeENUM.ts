@@ -1,0 +1,17 @@
+export enum ScenarioTypeENUM {
+  DEFAULT = 'default',
+  PRE_EARNINGS = 'pre_earnings',
+  EARNINGS_DAY = 'earnings_day',
+  EARNINGS_CALL = 'earnings_call',
+  POST_EARNINGS = 'post_earnings',
+  BALANCE_SHEET_ANALYSIS = 'balance_sheet_analysis',
+  INCOME_STATEMENT_ANALYSIS = 'income_statement_analysis',
+  CASH_FLOW_ANALYSIS = 'cash_flow_analysis',
+  COVENANT_ANALYSIS = 'covenant_analysis',
+  ISSUER_CREDITWORTHINESS = 'issuer_creditworthiness',
+  DEBT_SERVICE_CAPACITY = 'debt_service_capacity',
+  REFINANCING_RISK = 'refinancing_risk',
+  MARKET_TERMS_ANALYSIS = 'market_terms_analysis',
+  EXPLORATORY_DUE_DILIGENCE = 'exploratory_due_diligence',
+  CONFIRMATORY_DUE_DILIGENCE = 'confirmatory_due_diligence',
+}
