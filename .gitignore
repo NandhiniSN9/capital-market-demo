@@ -1,6 +1,9 @@
 # Databricks CLI sync metadata
 .databricks/
 
+# Databricks workspace manifest
+manifest.mf
+
 # Python
 __pycache__/
 *.py[cod]
